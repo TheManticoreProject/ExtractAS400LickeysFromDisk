@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/TheManticoreProject/ExtractAS400LickeysFromDisk/licenceinfo"
-	"github.com/TheManticoreProject/ExtractAS400LickeysFromDisk/licenceinfo/products"
+	"github.com/TheManticoreProject/ExtractAS400LickeysFromDisk/products"
 	"github.com/TheManticoreProject/ExtractAS400LickeysFromDisk/progress"
 )
 
