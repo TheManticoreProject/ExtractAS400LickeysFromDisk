@@ -31,20 +31,26 @@ func SearchChunk(baseOffset int64, chunk []byte, filename string, results *resul
 		// Search for the next 'V' in the chunk
 		// We look for the product id + option + version + release + modification + feature
 		// For example: 5770SS1V7R5M05050 (product id: 5770, Option: SS1, Version: 7, Release: 5, Modification: 0, Feature: 5050)
-		nextIndex := bytes.IndexByte(chunk[currentIndex:], EBCDIC_V)
+		// Ensure we do not find a 'V' too close to the end to safely read VxRxMx (needs 6 bytes)
+		searchLimit := len(chunk) - 6
+		if currentIndex > searchLimit {
+			break
+		}
+		nextIndex := bytes.IndexByte(chunk[currentIndex:searchLimit+1], EBCDIC_V)
 		if nextIndex == -1 {
 			break
 		}
 
 		// Check that the release and modification are valid (VxRxMx)
-		if chunk[currentIndex+nextIndex] != EBCDIC_V || chunk[currentIndex+nextIndex+2] != EBCDIC_R || chunk[currentIndex+nextIndex+4] != EBCDIC_M {
+		idx := currentIndex + nextIndex
+		if chunk[idx] != EBCDIC_V || chunk[idx+2] != EBCDIC_R || chunk[idx+4] != EBCDIC_M {
 			currentIndex += nextIndex + 1
 			continue
 		}
 		// Check that the release and modification are valid (VxRxMx) with digits 0-9
-		if chunk[currentIndex+nextIndex+1] < EBCDIC_0 || chunk[currentIndex+nextIndex+1] > EBCDIC_9 ||
-			chunk[currentIndex+nextIndex+3] < EBCDIC_0 || chunk[currentIndex+nextIndex+3] > EBCDIC_9 ||
-			chunk[currentIndex+nextIndex+5] < EBCDIC_0 || chunk[currentIndex+nextIndex+5] > EBCDIC_9 {
+		if chunk[idx+1] < EBCDIC_0 || chunk[idx+1] > EBCDIC_9 ||
+			chunk[idx+3] < EBCDIC_0 || chunk[idx+3] > EBCDIC_9 ||
+			chunk[idx+5] < EBCDIC_0 || chunk[idx+5] > EBCDIC_9 {
 			currentIndex += nextIndex + 1
 			continue
 		}
@@ -52,24 +58,24 @@ func SearchChunk(baseOffset int64, chunk []byte, filename string, results *resul
 		// Try to parse as LICENCEINFO2 first (1-byte header), then fall back to LICENCEINFO1 (20-byte header)
 
 		// Candidate for LICENCEINFO2
-		startLic2 := currentIndex + nextIndex - 7 - 1
+		startLic2 := idx - 7 - 1
 		if startLic2 >= 0 && (startLic2+licenceinfo.LICENCEINFO2_STRUCT_SIZE) <= len(chunk) {
 			endLic2 := startLic2 + licenceinfo.LICENCEINFO2_STRUCT_SIZE
 			lic2 := licenceinfo.LICENCEINFO2{}
 			if _, err := lic2.Unmarshal(chunk[startLic2:endLic2]); err == nil {
-				results.ReportResult(baseOffset+int64(currentIndex+nextIndex), filename, &lic2)
+				results.ReportResult(baseOffset+int64(idx), filename, &lic2)
 				currentIndex += nextIndex + licenceinfo.LICENCEINFO2_STRUCT_SIZE
 				continue
 			}
 		}
 
 		// Candidate for LICENCEINFO1
-		startLic1 := currentIndex + nextIndex - 7 - 20
+		startLic1 := idx - 7 - 20
 		if startLic1 >= 0 && (startLic1+licenceinfo.LICENCEINFO1_STRUCT_SIZE) <= len(chunk) {
 			endLic1 := startLic1 + licenceinfo.LICENCEINFO1_STRUCT_SIZE
 			lic1 := licenceinfo.LICENCEINFO1{}
 			if _, err := lic1.Unmarshal(chunk[startLic1:endLic1]); err == nil {
-				results.ReportResult(baseOffset+int64(currentIndex+nextIndex), filename, &lic1)
+				results.ReportResult(baseOffset+int64(idx), filename, &lic1)
 				currentIndex += nextIndex + licenceinfo.LICENCEINFO1_STRUCT_SIZE
 				continue
 			}
